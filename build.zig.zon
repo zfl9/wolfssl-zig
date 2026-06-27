@@ -1,0 +1,18 @@
+.{
+    .name = .wolfssl,
+    .version = "5.9.2",
+    .fingerprint = 0x192f6f88f28eb9fb, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{
+        .wolfssl_source = .{
+            .url = "https://github.com/wolfSSL/wolfssl/archive/refs/tags/v5.9.2-stable.tar.gz",
+            .hash = "N-V-__8AAPhMWQf0AfQZBj09a8GS8HmcI1gcIMKqC5PmBx6a",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build.sh",
+        "src",
+    },
+}
