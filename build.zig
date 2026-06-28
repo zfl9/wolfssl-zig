@@ -22,7 +22,8 @@ pub fn build(b: *std.Build) !void {
     const single_threaded = b.option(bool, "single-threaded", "single threaded mode for wolfssl") orelse false;
 
     // run the build script in the build directory
-    const build_script = b.addSystemCommand(&.{"./build.sh"});
+    const build_script = b.addSystemCommand(&.{"bash"});
+    build_script.addFileArg(b.path("build.sh")); // allows the caching system to detect changes to the script
     build_script.addDirectoryArg(build_dir); // the source directory
     const build_out = build_script.addOutputDirectoryArg("build_out"); // the install directory
     build_script.addArgs(&.{
