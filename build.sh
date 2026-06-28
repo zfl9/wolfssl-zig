@@ -65,5 +65,7 @@ build() {
     make install
 }
 
+# TODO: clean up the build directory before running the script
+
 # install_deps
 build

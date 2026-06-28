@@ -13,6 +13,7 @@ pub fn build(b: *std.Build) !void {
     // copy the source files to the build directory
     const wf = b.addWriteFiles();
     const build_dir = wf.addCopyDirectory(source.path(""), "", .{});
+    _ = wf.addCopyFile(b.path("build.sh"), ".zigcopy.build.sh"); // allows the caching system to detect changes to the script
 
     // zig cc -target <target> -mcpu <cpu>
     const zig_exe = b.graph.zig_exe;
