@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) !void {
 
     // zig cc -target <target> -mcpu <cpu>
     const zig_exe = b.graph.zig_exe;
-    const zig_target = try target.query.zigTriple(b.allocator); // TODO: remove os-version info
+    const zig_target = try target.result.linuxTriple(b.allocator); // TODO: check the triple description
     const zig_mcpu = try std.zig.serializeCpuAlloc(b.allocator, target.result.cpu); // NOTE: cannot be `native`
     const lto_mode = b.option(std.zig.LtoMode, "lto", "enable link time optimization") orelse .none;
     const single_threaded = b.option(bool, "single-threaded", "single threaded mode for wolfssl") orelse false;
