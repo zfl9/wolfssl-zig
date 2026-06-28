@@ -37,6 +37,8 @@ build() {
         lto_flag="-flto=$lto_mode"
     fi
 
+    # TODO: -ffunction-sections -fdata-sections -Wl,--gc-sections
+
     # configure options
     local config_args=(
         CC="$zig_exe cc -target $zig_target -mcpu=$zig_mcpu -O3 -Xclang -O3 $lto_flag"
