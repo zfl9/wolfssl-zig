@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -14,19 +14,24 @@ pub fn build(b: *std.Build) void {
     const wf = b.addWriteFiles();
     const build_dir = wf.addCopyDirectory(source.path(""), "", .{});
 
+    // zig cc -target <target> -mcpu <cpu>
+    const zig_exe = b.graph.zig_exe;
+    const zig_target = try target.query.zigTriple(b.allocator); // TODO: remove os-version info
+    const zig_mcpu = try std.zig.serializeCpuAlloc(b.allocator, target.result.cpu); // NOTE: cannot be `native`
+    const lto_mode = b.option(std.zig.LtoMode, "lto", "enable link time optimization") orelse .none;
+    const single_threaded = b.option(bool, "single-threaded", "single threaded mode for wolfssl") orelse false;
+
     // run the build script in the build directory
-    // TODO: inject `target` and `optimize` to the build script
     const build_script = b.addSystemCommand(&.{"./build.sh"});
     build_script.addDirectoryArg(build_dir); // the source directory
     const build_out = build_script.addOutputDirectoryArg("build_out"); // the install directory
-
-    // FIXME: symbolic link files (.so, .so.X) were ignored during installation.
-    // // install the build_out directory
-    // b.installDirectory(.{
-    //     .source_dir = build_out.path(b, ""),
-    //     .install_dir = .prefix,
-    //     .install_subdir = "",
-    // });
+    build_script.addArgs(&.{
+        zig_exe,
+        zig_target,
+        zig_mcpu,
+        @tagName(lto_mode),
+        if (single_threaded) "1" else "0",
+    });
 
     // install the header files
     b.installDirectory(.{
@@ -36,10 +41,6 @@ pub fn build(b: *std.Build) void {
     });
 
     // install the library files
-    const install_lib1 = b.addInstallLibFile(build_out.path(b, "lib/libwolfssl.a"), "libwolfssl.a");
-    const install_lib2 = b.addInstallLibFile(build_out.path(b, "lib/libwolfssl.so"), "libwolfssl.so");
-    const install_lib3 = b.addInstallLibFile(build_out.path(b, "lib/libwolfssl.so.45"), "libwolfssl.so.45");
-    b.getInstallStep().dependOn(&install_lib1.step);
-    b.getInstallStep().dependOn(&install_lib2.step);
-    b.getInstallStep().dependOn(&install_lib3.step);
+    const install_lib = b.addInstallLibFile(build_out.path(b, "lib/libwolfssl.a"), "libwolfssl.a");
+    b.getInstallStep().dependOn(&install_lib.step);
 }
