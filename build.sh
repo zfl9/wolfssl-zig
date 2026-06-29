@@ -3,15 +3,21 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-src_dir="$1"
-install_dir="$2"
-zig_exe="$3"
-zig_target="$4"
-zig_mcpu="$5"
-lto_mode="$6"
-single_threaded="$7"
+source "$1" # conf.sh
+src_dir="$2"
+install_dir="$3"
+# zig_exe="$3"
+# zig_target="$4"
+# zig_mcpu="$5"
+# lto_mode="$6"
+# single_threaded="$7"
 # todo: more configure options
 
+# convert to absolute path
+mkdir -p "$install_dir"
+install_dir="$(cd "$install_dir" && pwd)"
+
+# enter the source directory
 cd "$src_dir"
 
 install_deps() {
