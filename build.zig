@@ -19,16 +19,23 @@ pub fn build(b: *std.Build) !void {
     };
 
     // script dependencies (rebuild is triggered when changes are made)
-    var build_dep_buf: std.ArrayList(u8) = .empty;
-    defer build_dep_buf.deinit(allocator);
-    try build_dep_buf.print(allocator, "zig_exe={s}\n", .{zig_exe});
-    try build_dep_buf.print(allocator, "zig_target={s}\n", .{zig_target});
-    try build_dep_buf.print(allocator, "linux_target={s}\n", .{linux_target});
-    try build_dep_buf.print(allocator, "zig_mcpu={s}\n", .{zig_mcpu});
-    try build_dep_buf.print(allocator, "lto_mode={any}\n", .{lto_mode});
-    try build_dep_buf.print(allocator, "single_threaded={any}\n", .{single_threaded});
-    try build_dep_buf.print(allocator, "cc_optimize={s}\n", .{cc_optimize});
-    const build_dep = try build_dep_buf.toOwnedSlice(allocator);
+    const build_dep = b.fmt(
+        \\zig_exe={s}
+        \\zig_target={s}
+        \\linux_target={s}
+        \\zig_mcpu={s}
+        \\lto_mode={any}
+        \\single_threaded={any}
+        \\cc_optimize={s}
+    , .{
+        zig_exe,
+        zig_target,
+        linux_target,
+        zig_mcpu,
+        lto_mode,
+        single_threaded,
+        cc_optimize,
+    });
 
     // the source directory (readonly, from the original upstream)
     const source_dir = b.dependency("wolfssl_source", .{}).path("");
@@ -49,8 +56,8 @@ pub fn build(b: *std.Build) !void {
     configure.step.dependOn(&autogen_sh.step);
     _ = configure.captureStdOut(); // tell zig that it has no side effects
     configure.setCwd(build_dir);
-    configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, zig_target, zig_mcpu }));
-    configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, zig_target, zig_mcpu }));
+    configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
+    configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
     configure.addArg(b.fmt("AR={s} ar", .{zig_exe}));
     configure.addArg(b.fmt("RANLIB={s} ranlib", .{zig_exe}));
     configure.addArg(b.fmt("CFLAGS={s} -ffunction-sections -fdata-sections", .{cc_optimize}));
