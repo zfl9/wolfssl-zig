@@ -81,7 +81,7 @@ pub fn build(b: *std.Build) !void {
     make.step.dependOn(&configure.step);
     _ = make.captureStdOut(); // tell zig that it has no side effects
     make.setCwd(build_dir);
-    make.addArg(b.fmt("-j{d}", .{try std.Thread.getCpuCount()}));
+    make.addArg(b.fmt("-j{d}", .{std.Thread.getCpuCount() catch 2}));
 
     // make install DESTDIR=build_out
     const make_install = b.addSystemCommand(&.{ "make", "install" });
