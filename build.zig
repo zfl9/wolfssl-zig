@@ -12,15 +12,11 @@ pub fn build(b: *std.Build) !void {
     const zig_mcpu = try std.zig.serializeCpuAlloc(allocator, target.result.cpu); // cpu_model+features-features
     const lto_mode = b.option(std.zig.LtoMode, "lto", "enable link time optimization") orelse .none;
     const single_threaded = b.option(bool, "single_threaded", "single threaded mode for wolfssl") orelse false;
-
-    var cc_optimize_buf: std.ArrayList(u8) = .empty;
-    try cc_optimize_buf.appendSlice(allocator, "-g0 -O3 -Xclang -O3"); // -g0 and `-Xclang -O3` is required
-    switch (lto_mode) {
-        .none => {},
-        .full => try cc_optimize_buf.appendSlice(allocator, " -flto=full"),
-        .thin => try cc_optimize_buf.appendSlice(allocator, " -flto=thin"),
-    }
-    const cc_optimize = try cc_optimize_buf.toOwnedSlice(allocator);
+    const cc_optimize = switch (lto_mode) {
+        .none => "-g0 -O3 -Xclang -O3",
+        .full => "-g0 -O3 -Xclang -O3 -flto=full",
+        .thin => "-g0 -O3 -Xclang -O3 -flto=thin",
+    };
 
     // script dependencies (rebuild is triggered when changes are made)
     var build_dep_buf: std.ArrayList(u8) = .empty;
