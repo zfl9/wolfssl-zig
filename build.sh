@@ -38,21 +38,23 @@ install_deps() {
 build() {
     ./autogen.sh
 
-    local lto_flag=""
+    local optimize="-O3 -Xclang -O3" # TODO: test whether `-Xclang -O3`` is really necessary
     if [ "$lto_mode" = "full" -o "$lto_mode" = "thin" ]; then
-        lto_flag="-flto=$lto_mode"
+        optimize+=" -flto=$lto_mode"
     fi
-
-    # TODO: -ffunction-sections -fdata-sections -Wl,--gc-sections
 
     # configure options
     local config_args=(
-        CC="$zig_exe cc -target $zig_target -mcpu=$zig_mcpu -O3 -Xclang -O3 $lto_flag"
-        CXX="$zig_exe c++ -target $zig_target -mcpu=$zig_mcpu -O3 -Xclang -O3 $lto_flag"
+        CC="$zig_exe cc -target $zig_target -mcpu=$zig_mcpu"
+        CXX="$zig_exe c++ -target $zig_target -mcpu=$zig_mcpu"
+        CFLAGS="$optimize -ffunction-sections -fdata-sections"
+        CXXFLAGS="$optimize -ffunction-sections -fdata-sections"
+        LDFLAGS="$optimize -Wl,--gc-sections -Wl,-s"
         AR="$zig_exe ar"
         RANLIB="$zig_exe ranlib"
         --host="$zig_target"
         --prefix="$install_dir"
+        --enable-jobserver=no
         --enable-static
         --disable-shared
         --disable-openssl-compatible-defaults
@@ -67,11 +69,9 @@ build() {
     fi
 
     ./configure "${config_args[@]}"
-    make
+    make -j$(nproc)
     make install
 }
-
-# TODO: clean up the build directory before running the script
 
 # install_deps
 build
