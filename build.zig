@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) !void {
     const cc_optimize = try cc_optimize_buf.toOwnedSlice(allocator);
 
     // script dependencies (rebuild is triggered when changes are made)
-    var build_dep_buf = std.ArrayList(u8).empty;
+    var build_dep_buf: std.ArrayList(u8) = .empty;
     defer build_dep_buf.deinit(allocator);
     try build_dep_buf.print(allocator, "zig_exe={s}\n", .{zig_exe});
     try build_dep_buf.print(allocator, "zig_target={s}\n", .{zig_target});
