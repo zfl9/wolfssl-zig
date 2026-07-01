@@ -1,5 +1,41 @@
 const std = @import("std");
 
+const CommandGroup = struct {
+    b: *std.Build,
+    cwd: std.Build.LazyPath,
+    last_command: ?*std.Build.Step.Run,
+
+    pub fn init(b: *std.Build, cwd: std.Build.LazyPath) CommandGroup {
+        return .{
+            .b = b,
+            .cwd = cwd,
+            .last_command = null,
+        };
+    }
+
+    pub const Options = struct {
+        name: ?[]const u8 = null,
+    };
+
+    /// the stdout is captured and ignored
+    pub fn add(self: *CommandGroup, program: []const u8, options: Options) *std.Build.Step.Run {
+        const b = self.b;
+
+        const command = b.addSystemCommand(&.{program});
+        command.setCwd(self.cwd);
+        _ = command.captureStdOut(); // tell zig that it has no side effects
+
+        if (options.name) |name|
+            command.setName(b.fmt("run {s}", .{name}));
+
+        if (self.last_command) |last_command|
+            command.step.dependOn(&last_command.step);
+        self.last_command = command;
+
+        return command;
+    }
+};
+
 pub fn build(b: *std.Build) !void {
     const allocator = b.allocator;
     const target = b.standardTargetOptions(.{});
@@ -46,16 +82,13 @@ pub fn build(b: *std.Build) !void {
     const build_dir = wf.addCopyDirectory(source_dir, "", .{});
     _ = wf.add(".wolfssl-zig@build.dep", build_dep); // trigger a rebuild if necessary
 
+    var cmd_group = CommandGroup.init(b, build_dir);
+
     // autogen.sh
-    const autogen_sh = b.addSystemCommand(&.{"./autogen.sh"});
-    autogen_sh.setCwd(build_dir);
-    _ = autogen_sh.captureStdOut(); // tell zig that it has no side effects
+    _ = cmd_group.add("./autogen.sh", .{});
 
     // configure
-    const configure = b.addSystemCommand(&.{"./configure"});
-    configure.step.dependOn(&autogen_sh.step);
-    _ = configure.captureStdOut(); // tell zig that it has no side effects
-    configure.setCwd(build_dir);
+    const configure = cmd_group.add("./configure", .{});
     configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
     configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
     configure.addArg(b.fmt("AR={s} ar", .{zig_exe}));
@@ -80,18 +113,12 @@ pub fn build(b: *std.Build) !void {
     // TODO: add more configure options
 
     // make -j$(nproc)
-    const make = b.addSystemCommand(&.{"make"});
-    make.step.dependOn(&configure.step);
-    _ = make.captureStdOut(); // tell zig that it has no side effects
-    make.setCwd(build_dir);
+    const make = cmd_group.add("make", .{});
     make.addArg(b.fmt("-j{d}", .{std.Thread.getCpuCount() catch 2}));
 
     // make install DESTDIR=build_out
-    const make_install = b.addSystemCommand(&.{ "make", "install" });
-    make_install.step.dependOn(&make.step);
-    make_install.setName("run make install");
-    make_install.setCwd(build_dir);
-    _ = make_install.captureStdOut(); // tell zig that it has no side effects
+    const make_install = cmd_group.add("make", .{ .name = "make install" });
+    make_install.addArg("install");
     const build_out = make_install.addPrefixedOutputDirectoryArg("DESTDIR=", "build_out").path(b, "usr");
 
     // export the artifact
