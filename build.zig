@@ -41,7 +41,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     // const optimize = b.standardOptimizeOption(.{});
 
-    // script options
+    // build options
     const zig_exe = b.graph.zig_exe;
     const zig_target = try target.result.zigTriple(allocator); // arch-os-abi (with os.version and abi.version)
     const linux_target = try target.result.linuxTriple(allocator); // arch-os-abi
@@ -54,8 +54,9 @@ pub fn build(b: *std.Build) !void {
         .thin => "-g0 -O3 -Xclang -O3 -flto=thin",
     };
 
-    // script dependencies (rebuild is triggered when changes are made)
-    const build_dep = b.fmt(
+    // description of the build (rebuild when changes occur)
+    const description = b.fmt(
+        \\magic={d}
         \\zig_exe={s}
         \\zig_target={s}
         \\linux_target={s}
@@ -63,7 +64,9 @@ pub fn build(b: *std.Build) !void {
         \\lto_mode={any}
         \\single_threaded={any}
         \\cc_optimize={s}
+        \\
     , .{
+        1, // change this when the build logic changes
         zig_exe,
         zig_target,
         linux_target,
@@ -80,7 +83,7 @@ pub fn build(b: *std.Build) !void {
     const wf = b.addWriteFiles();
     wf.step.name = "copy wolfssl source";
     const build_dir = wf.addCopyDirectory(source_dir, "", .{});
-    _ = wf.add(".wolfssl-zig@build.dep", build_dep); // trigger a rebuild if necessary
+    _ = wf.add(".wolfssl-zig@build.desc", description); // trigger rebuild if necessary
 
     var cmd_group = CommandGroup.init(b, build_dir);
 
@@ -103,7 +106,21 @@ pub fn build(b: *std.Build) !void {
     configure.addArg("--disable-shared"); // we don't need shared library
     configure.addArg("--disable-openssl-compatible-defaults");
     configure.addArg("--disable-opensslextra");
+    configure.addArg("--disable-opensslall");
     configure.addArg("--disable-oldnames");
+    configure.addArg("--disable-examples");
+    configure.addArg("--disable-crypttests");
+    configure.addArg("--disable-asyncthreads");
+    configure.addArg("--disable-dh");
+    configure.addArg("--enable-ecc");
+    configure.addArg("--enable-rsa");
+    configure.addArg("--enable-tls13");
+    configure.addArg("--disable-oldtls");
+    configure.addArg("--disable-dtls");
+    configure.addArg("--disable-pwdbased");
+    configure.addArg("--disable-aescbc");
+    configure.addArg("--disable-sha3");
+    configure.addArg("--disable-sha224");
     configure.addArg("--enable-alpn");
     configure.addArg("--enable-session-ticket");
     if (single_threaded)
