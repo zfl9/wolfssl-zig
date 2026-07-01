@@ -97,6 +97,7 @@ pub fn build(b: *std.Build) !void {
     configure.addArg(b.fmt("LD={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
     configure.addArg(b.fmt("AR={s} ar", .{zig_exe}));
     configure.addArg(b.fmt("RANLIB={s} ranlib", .{zig_exe}));
+    configure.addArg(b.fmt("OBJCOPY={s} objcopy", .{zig_exe}));
     configure.addArg(b.fmt("CFLAGS={s} -ffunction-sections -fdata-sections", .{cc_optimize}));
     configure.addArg(b.fmt("CXXFLAGS={s} -ffunction-sections -fdata-sections", .{cc_optimize}));
     configure.addArg(b.fmt("LDFLAGS={s} -Wl,--gc-sections -Wl,-s", .{cc_optimize}));
