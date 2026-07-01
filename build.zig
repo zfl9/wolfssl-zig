@@ -94,6 +94,7 @@ pub fn build(b: *std.Build) !void {
     const configure = cmd_group.add("./configure", .{});
     configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
     configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
+    configure.addArg(b.fmt("LD={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
     configure.addArg(b.fmt("AR={s} ar", .{zig_exe}));
     configure.addArg(b.fmt("RANLIB={s} ranlib", .{zig_exe}));
     configure.addArg(b.fmt("CFLAGS={s} -ffunction-sections -fdata-sections", .{cc_optimize}));
