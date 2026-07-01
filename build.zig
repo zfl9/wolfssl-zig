@@ -126,6 +126,7 @@ pub fn build(b: *std.Build) !void {
     configure.addArg("--enable-tls13");
     configure.addArg("--enable-ecc");
     configure.addArg("--enable-rsa");
+    configure.addArg("--enable-sni"); // server name indication
     configure.addArg("--enable-alpn");
     configure.addArg("--enable-session-ticket");
     if (single_threaded)
