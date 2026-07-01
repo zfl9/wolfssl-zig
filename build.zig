@@ -107,6 +107,7 @@ pub fn build(b: *std.Build) !void {
     configure.addArg("--disable-openssl-compatible-defaults");
     configure.addArg("--disable-opensslextra");
     configure.addArg("--disable-opensslall");
+    configure.addArg("--disable-errorqueue"); // this is the OpenSSL compatibility layer
     configure.addArg("--disable-oldnames");
     configure.addArg("--disable-examples");
     configure.addArg("--disable-crypttests");
