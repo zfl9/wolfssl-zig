@@ -111,16 +111,20 @@ pub fn build(b: *std.Build) !void {
     configure.addArg("--disable-examples");
     configure.addArg("--disable-crypttests");
     configure.addArg("--disable-asyncthreads");
-    configure.addArg("--disable-dh");
-    configure.addArg("--enable-ecc");
-    configure.addArg("--enable-rsa");
-    configure.addArg("--enable-tls13");
     configure.addArg("--disable-oldtls");
     configure.addArg("--disable-dtls");
     configure.addArg("--disable-pwdbased");
     configure.addArg("--disable-aescbc");
+    configure.addArg("--disable-dh");
     configure.addArg("--disable-sha3");
     configure.addArg("--disable-sha224");
+    configure.addArg("--disable-sha"); // drop legacy SHA-1
+    configure.addArg("--disable-oaep"); // drop RSA-OAEP (not used by TLS)
+    configure.addArg("--disable-pkcs12"); // drop .p12/.pfx parsing support
+    configure.addArg("--disable-asn-print"); // drop human-readable ASN1 text dumps
+    configure.addArg("--enable-tls13");
+    configure.addArg("--enable-ecc");
+    configure.addArg("--enable-rsa");
     configure.addArg("--enable-alpn");
     configure.addArg("--enable-session-ticket");
     if (single_threaded)
