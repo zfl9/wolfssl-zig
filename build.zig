@@ -61,7 +61,7 @@ const ZMake = struct {
         makefile,
     };
 
-    pub const CreateOption = struct {
+    pub const CreateArgs = struct {
         build_system_type: BuildSystemType,
         source_dir: std.Build.LazyPath,
         target: ?std.Build.ResolvedTarget = null,
@@ -87,27 +87,27 @@ const ZMake = struct {
         }
     }
 
-    pub fn create(b: *std.Build, name: []const u8, opt: CreateOption) *ZMake {
-        check_build_system_type(opt.build_system_type);
+    pub fn create(b: *std.Build, name: []const u8, args: CreateArgs) *ZMake {
+        check_build_system_type(args.build_system_type);
         const self = b.allocator.create(ZMake) catch unreachable;
         self.* = .{
             .b = b,
             .name = b.dupe(name),
-            .build_system_type = opt.build_system_type,
-            .source_dir = opt.source_dir,
-            .target = opt.target orelse b.graph.host,
-            .optimize = opt.optimize,
-            .lto = opt.lto,
-            .separate_sections = opt.separate_sections,
-            .gc_sections = opt.gc_sections,
-            .strip = opt.strip orelse switch (opt.optimize) {
+            .build_system_type = args.build_system_type,
+            .source_dir = args.source_dir,
+            .target = args.target orelse b.graph.host,
+            .optimize = args.optimize,
+            .lto = args.lto,
+            .separate_sections = args.separate_sections,
+            .gc_sections = args.gc_sections,
+            .strip = args.strip orelse switch (args.optimize) {
                 .Debug => false,
                 .ReleaseSafe => false,
                 .ReleaseSmall => true,
                 .ReleaseFast => true,
             },
-            .run_autogen = opt.run_autogen,
-            .install_prefix = opt.install_prefix,
+            .run_autogen = args.run_autogen,
+            .install_prefix = args.install_prefix,
             .configure_args = .empty,
         };
         return self;
@@ -227,7 +227,15 @@ const ZMake = struct {
         // make install DESTDIR=build_out
         const make_install = pipeline.add("make", .{ .name = self.get_step_name("make install") });
         make_install.addArg("install");
-        const build_out = make_install.addPrefixedOutputDirectoryArg("DESTDIR=", "build_out").path(b, "usr");
+        const out_dir = make_install.addPrefixedOutputDirectoryArg("DESTDIR=", "build_out");
+
+        // $install_prefix/{include, lib, ...}
+        const rel_path = if (self.install_prefix.len > 0 and self.install_prefix[0] == '/')
+            self.install_prefix[1..]
+        else
+            self.install_prefix;
+
+        const build_out = out_dir.path(b, rel_path);
         return build_out;
     }
 
