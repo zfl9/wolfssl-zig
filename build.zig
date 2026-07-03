@@ -1,12 +1,12 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const CommandSequence = struct {
+const CommandPipeline = struct {
     b: *std.Build,
     cwd: std.Build.LazyPath,
     last_command: ?*std.Build.Step.Run,
 
-    pub fn init(b: *std.Build, cwd: std.Build.LazyPath) CommandSequence {
+    pub fn init(b: *std.Build, cwd: std.Build.LazyPath) CommandPipeline {
         return .{
             .b = b,
             .cwd = cwd,
@@ -19,7 +19,7 @@ const CommandSequence = struct {
     };
 
     /// the stdout is captured and ignored
-    pub fn add(self: *CommandSequence, program: []const u8, options: Options) *std.Build.Step.Run {
+    pub fn add(self: *CommandPipeline, program: []const u8, options: Options) *std.Build.Step.Run {
         const b = self.b;
 
         const command = b.addSystemCommand(&.{program});
@@ -192,14 +192,14 @@ const ZMake = struct {
         const build_dir = wf.addCopyDirectory(self.source_dir, "", .{});
         _ = wf.add(".zmake_build.desc", description); // trigger rebuild if necessary
 
-        var cmd_seq = CommandSequence.init(b, build_dir);
+        var pipeline = CommandPipeline.init(b, build_dir);
 
         // autogen.sh
         if (self.run_autogen)
-            _ = cmd_seq.add("./autogen.sh", .{ .name = self.get_step_name("./autogen.sh") });
+            _ = pipeline.add("./autogen.sh", .{ .name = self.get_step_name("./autogen.sh") });
 
         // configure
-        const configure = cmd_seq.add("./configure", .{ .name = self.get_step_name("./configure") });
+        const configure = pipeline.add("./configure", .{ .name = self.get_step_name("./configure") });
         configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
         configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
         configure.addArg(b.fmt("LD={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
@@ -215,11 +215,11 @@ const ZMake = struct {
             configure.addArg(arg); // configure arguments passed by the user
 
         // make -j$(nproc)
-        const make = cmd_seq.add("make", .{ .name = self.get_step_name("make") });
+        const make = pipeline.add("make", .{ .name = self.get_step_name("make") });
         make.addArg(b.fmt("-j{d}", .{std.Thread.getCpuCount() catch 2}));
 
         // make install DESTDIR=build_out
-        const make_install = cmd_seq.add("make", .{ .name = self.get_step_name("make install") });
+        const make_install = pipeline.add("make", .{ .name = self.get_step_name("make install") });
         make_install.addArg("install");
         const build_out = make_install.addPrefixedOutputDirectoryArg("DESTDIR=", "build_out").path(b, "usr");
         return build_out;
