@@ -1,12 +1,12 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const CommandGroup = struct {
+const CommandSequence = struct {
     b: *std.Build,
     cwd: std.Build.LazyPath,
     last_command: ?*std.Build.Step.Run,
 
-    pub fn init(b: *std.Build, cwd: std.Build.LazyPath) CommandGroup {
+    pub fn init(b: *std.Build, cwd: std.Build.LazyPath) CommandSequence {
         return .{
             .b = b,
             .cwd = cwd,
@@ -19,7 +19,7 @@ const CommandGroup = struct {
     };
 
     /// the stdout is captured and ignored
-    pub fn add(self: *CommandGroup, program: []const u8, options: Options) *std.Build.Step.Run {
+    pub fn add(self: *CommandSequence, program: []const u8, options: Options) *std.Build.Step.Run {
         const b = self.b;
 
         const command = b.addSystemCommand(&.{program});
@@ -44,7 +44,7 @@ const ZMake = struct {
     source_dir: std.Build.LazyPath,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    lto_mode: std.zig.LtoMode,
+    lto: std.zig.LtoMode,
     separate_sections: bool,
     gc_sections: bool,
     strip: bool,
@@ -65,7 +65,7 @@ const ZMake = struct {
         source_dir: std.Build.LazyPath,
         target: ?std.Build.ResolvedTarget = null,
         optimize: std.builtin.OptimizeMode = .ReleaseFast,
-        lto_mode: std.zig.LtoMode = .none,
+        lto: std.zig.LtoMode = .none,
         /// -ffunction-sections -fdata-sections
         separate_sections: bool = true,
         /// -Wl,--gc-sections
@@ -94,7 +94,7 @@ const ZMake = struct {
             .source_dir = opt.source_dir,
             .target = opt.target orelse b.graph.host,
             .optimize = opt.optimize,
-            .lto_mode = opt.lto_mode,
+            .lto = opt.lto,
             .separate_sections = opt.separate_sections,
             .gc_sections = opt.gc_sections,
             .strip = switch (opt.optimize) {
@@ -132,7 +132,7 @@ const ZMake = struct {
             .ReleaseSmall => "-g0 -Os",
             .ReleaseFast => "-g0 -O3 -Xclang -O3",
         };
-        const f_optimize = switch (self.lto_mode) {
+        const f_optimize = switch (self.lto) {
             .none => f_raw_optimize,
             .full => b.fmt("{s} -flto=full", .{f_raw_optimize}),
             .thin => b.fmt("{s} -flto=thin", .{f_raw_optimize}),
@@ -153,7 +153,7 @@ const ZMake = struct {
             \\linux_target: {s}
             \\zig_mcpu: {s}
             \\optimize: {s}
-            \\lto_mode: {s}
+            \\lto: {s}
             \\f_optimize: {s}
             \\f_separate_sections: {s}
             \\f_gc_sections: {s}
@@ -168,7 +168,7 @@ const ZMake = struct {
             linux_target,
             zig_mcpu,
             @tagName(self.optimize),
-            @tagName(self.lto_mode),
+            @tagName(self.lto),
             f_optimize,
             f_separate_sections,
             f_gc_sections,
@@ -192,14 +192,14 @@ const ZMake = struct {
         const build_dir = wf.addCopyDirectory(self.source_dir, "", .{});
         _ = wf.add(".zmake_build.desc", description); // trigger rebuild if necessary
 
-        var cmd_group = CommandGroup.init(b, build_dir);
+        var cmd_seq = CommandSequence.init(b, build_dir);
 
         // autogen.sh
         if (self.run_autogen)
-            _ = cmd_group.add("./autogen.sh", .{ .name = self.get_step_name("./autogen.sh") });
+            _ = cmd_seq.add("./autogen.sh", .{ .name = self.get_step_name("./autogen.sh") });
 
         // configure
-        const configure = cmd_group.add("./configure", .{ .name = self.get_step_name("./configure") });
+        const configure = cmd_seq.add("./configure", .{ .name = self.get_step_name("./configure") });
         configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
         configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
         configure.addArg(b.fmt("LD={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
@@ -215,11 +215,11 @@ const ZMake = struct {
             configure.addArg(arg); // configure arguments passed by the user
 
         // make -j$(nproc)
-        const make = cmd_group.add("make", .{ .name = self.get_step_name("make") });
+        const make = cmd_seq.add("make", .{ .name = self.get_step_name("make") });
         make.addArg(b.fmt("-j{d}", .{std.Thread.getCpuCount() catch 2}));
 
         // make install DESTDIR=build_out
-        const make_install = cmd_group.add("make", .{ .name = self.get_step_name("make install") });
+        const make_install = cmd_seq.add("make", .{ .name = self.get_step_name("make install") });
         make_install.addArg("install");
         const build_out = make_install.addPrefixedOutputDirectoryArg("DESTDIR=", "build_out").path(b, "usr");
         return build_out;
@@ -236,7 +236,7 @@ pub fn build(b: *std.Build) !void {
     // const optimize = b.standardOptimizeOption(.{});
 
     // build options
-    const lto_mode = b.option(std.zig.LtoMode, "lto", "enable link time optimization") orelse .none;
+    const lto = b.option(std.zig.LtoMode, "lto", "enable link time optimization") orelse .none;
     const single_threaded = b.option(bool, "single_threaded", "single threaded mode for wolfssl") orelse false;
 
     const zmake = ZMake.create(b, "wolfssl", .{
@@ -244,7 +244,7 @@ pub fn build(b: *std.Build) !void {
         .source_dir = b.dependency("wolfssl_source", .{}).path(""),
         .target = target,
         .optimize = .ReleaseFast,
-        .lto_mode = lto_mode,
+        .lto = lto,
         .run_autogen = true,
     });
 
