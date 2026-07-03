@@ -49,6 +49,7 @@ const ZMake = struct {
     gc_sections: bool,
     strip: bool,
     run_autogen: bool,
+    install_prefix: []const u8,
     configure_args: std.ArrayList([]const u8),
 
     pub const BuildSystemType = enum {
@@ -74,6 +75,8 @@ const ZMake = struct {
         strip: ?bool = null,
         /// run ./autogen.sh before ./configure ?
         run_autogen: bool = false,
+        /// logic install directory
+        install_prefix: []const u8 = "/usr",
     };
 
     fn check_build_system_type(build_system_type: BuildSystemType) void {
@@ -97,13 +100,14 @@ const ZMake = struct {
             .lto = opt.lto,
             .separate_sections = opt.separate_sections,
             .gc_sections = opt.gc_sections,
-            .strip = switch (opt.optimize) {
+            .strip = opt.strip orelse switch (opt.optimize) {
                 .Debug => false,
                 .ReleaseSafe => false,
                 .ReleaseSmall => true,
                 .ReleaseFast => true,
             },
             .run_autogen = opt.run_autogen,
+            .install_prefix = opt.install_prefix,
             .configure_args = .empty,
         };
         return self;
@@ -124,7 +128,7 @@ const ZMake = struct {
         // build options
         const zig_exe = b.graph.zig_exe;
         const zig_target = self.target.result.zigTriple(allocator) catch unreachable; // arch-os-abi (with os.version and abi.version)
-        const linux_target = self.target.result.linuxTriple(allocator) catch unreachable; // arch-os-abi
+        const pure_target = self.target.result.linuxTriple(allocator) catch unreachable; // arch-os-abi
         const zig_mcpu = std.zig.serializeCpuAlloc(allocator, self.target.result.cpu) catch unreachable; // cpu_model+features-features
         const f_raw_optimize = switch (self.optimize) {
             .Debug => "-g3 -O0",
@@ -150,7 +154,7 @@ const ZMake = struct {
             \\magic: {d}
             \\zig_exe: {s}
             \\zig_target: {s}
-            \\linux_target: {s}
+            \\pure_target: {s}
             \\zig_mcpu: {s}
             \\optimize: {s}
             \\lto: {s}
@@ -160,12 +164,13 @@ const ZMake = struct {
             \\f_strip: {s}
             \\build_system_type: {s}
             \\run_autogen: {any}
+            \\install_prefix: {s}
             \\
         , .{
             1, // change this when the build logic changes
             zig_exe,
             zig_target,
-            linux_target,
+            pure_target,
             zig_mcpu,
             @tagName(self.optimize),
             @tagName(self.lto),
@@ -175,6 +180,7 @@ const ZMake = struct {
             f_strip,
             @tagName(self.build_system_type),
             self.run_autogen,
+            self.install_prefix,
         });
         description_buf.appendSlice(allocator, base_description) catch unreachable;
 
@@ -200,17 +206,17 @@ const ZMake = struct {
 
         // configure
         const configure = pipeline.add("./configure", .{ .name = self.get_step_name("./configure") });
-        configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
-        configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
-        configure.addArg(b.fmt("LD={s} cc -target {s} -mcpu={s}", .{ zig_exe, linux_target, zig_mcpu }));
+        configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, pure_target, zig_mcpu }));
+        configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, pure_target, zig_mcpu }));
+        configure.addArg(b.fmt("LD={s} cc -target {s} -mcpu={s}", .{ zig_exe, pure_target, zig_mcpu }));
         configure.addArg(b.fmt("AR={s} ar", .{zig_exe}));
         configure.addArg(b.fmt("RANLIB={s} ranlib", .{zig_exe}));
         configure.addArg(b.fmt("OBJCOPY={s} objcopy", .{zig_exe}));
         configure.addArg(b.fmt("CFLAGS={s} {s}", .{ f_optimize, f_separate_sections }));
         configure.addArg(b.fmt("CXXFLAGS={s} {s}", .{ f_optimize, f_separate_sections }));
         configure.addArg(b.fmt("LDFLAGS={s} {s} {s}", .{ f_optimize, f_gc_sections, f_strip }));
-        configure.addArg(b.fmt("--host={s}", .{linux_target})); // must use the linux target
-        configure.addArg("--prefix=/usr"); // the logic install directory
+        configure.addArg(b.fmt("--host={s}", .{pure_target})); // must use the linux target
+        configure.addArg(b.fmt("--prefix={s}", .{self.install_prefix})); // the logic install directory
         for (self.configure_args.items) |arg|
             configure.addArg(arg); // configure arguments passed by the user
 
