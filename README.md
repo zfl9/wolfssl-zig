@@ -39,6 +39,16 @@ const lib_file = wolfssl.namedLazyPath("libwolfssl.a");
 | `-Dlto` | `enum` | `none` | LTO 模式（`none` / `full` / `thin`） |
 | `-Dsingle_threaded` | `bool` | `false` | 取消 wolfSSL 的线程安全支持，适用于单线程场景 |
 
+## 版本约定
+
+`.zon` 中的 `version` 字段与 wolfSSL 上游版本号保持一致，便于直观对照。
+本包自身的更新（构建逻辑调整、依赖升级等）通过 Git tag 后缀区分：
+
+- `v<wolfssl 版本>` — 初始版本（如 `v5.9.2`）
+- `v<wolfssl 版本>-rev<N>` — 后续修订（如 `v5.9.2-rev1`）
+
+使用者通过 `zig fetch --save=wolfssl <tag URL>` 选择具体版本。
+
 ## 本地构建
 
 ```bash
