@@ -32,6 +32,8 @@ const lib_file = wolfssl.namedLazyPath("libwolfssl.a");
 
 ## 构建选项
 
+支持 Zig 标准目标选项（`-Dtarget`、`-Dcpu` 等），此外还有：
+
 | 选项 | 类型 | 默认值 | 描述 |
 |---|---|---|---|
 | `-Dlto` | `enum` | `none` | LTO 模式（`none` / `full` / `thin`） |
