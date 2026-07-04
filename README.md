@@ -9,6 +9,8 @@
 
 ## 使用方法
 
+> 具体版本见 [Tags](https://github.com/zfl9/wolfssl-zig/tags) 页面。
+
 ```bash
 zig fetch --save=wolfssl https://github.com/zfl9/wolfssl-zig/archive/refs/tags/v5.9.2.tar.gz
 ```
