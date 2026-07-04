@@ -1,6 +1,6 @@
 # wolfssl-zig
 
-wolfSSL 的 Zig 封装包，用于将 wolfSSL 集成到你的 C/C++/Zig 项目中。
+[wolfSSL](https://github.com/wolfSSL/wolfssl) 的 Zig 包，用于将 wolfSSL 库集成至你的 C/C++/Zig 项目。
 
 ## 环境要求
 
