@@ -8,11 +8,14 @@
             .url = "https://github.com/wolfSSL/wolfssl/archive/refs/tags/v5.9.2-stable.tar.gz",
             .hash = "N-V-__8AAPhMWQf0AfQZBj09a8GS8HmcI1gcIMKqC5PmBx6a",
         },
+        .zmake = .{
+            .url = "https://github.com/zfl9/zmake/archive/refs/tags/v1.0.0.tar.gz",
+            .hash = "zmake-1.0.0-UnhqkD0kAADOwWI4uufNCdT9bBGUHX-Y3IbwwnNihYeS",
+        },
     },
     .paths = .{
         "build.zig",
         "build.zig.zon",
-        "build.sh",
         "src",
     },
 }

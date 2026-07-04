@@ -1,249 +1,5 @@
 const std = @import("std");
-const assert = std.debug.assert;
-
-const CommandPipeline = struct {
-    b: *std.Build,
-    cwd: std.Build.LazyPath,
-    last_command: ?*std.Build.Step.Run,
-
-    pub fn init(b: *std.Build, cwd: std.Build.LazyPath) CommandPipeline {
-        return .{
-            .b = b,
-            .cwd = cwd,
-            .last_command = null,
-        };
-    }
-
-    pub const Options = struct {
-        name: ?[]const u8 = null,
-    };
-
-    /// the stdout is captured and ignored
-    pub fn add(self: *CommandPipeline, program: []const u8, options: Options) *std.Build.Step.Run {
-        const b = self.b;
-
-        const command = b.addSystemCommand(&.{program});
-        command.setCwd(self.cwd);
-        _ = command.captureStdOut(); // tell zig that it has no side effects
-
-        if (options.name) |name|
-            command.setName(name);
-
-        if (self.last_command) |last_command|
-            command.step.dependOn(&last_command.step);
-        self.last_command = command;
-
-        return command;
-    }
-};
-
-const ZMake = struct {
-    b: *std.Build,
-    name: []const u8,
-    build_system_type: BuildSystemType,
-    source_dir: std.Build.LazyPath,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    lto: std.zig.LtoMode,
-    separate_sections: bool,
-    gc_sections: bool,
-    strip: bool,
-    run_autogen: bool,
-    install_prefix: []const u8,
-    configure_args: std.ArrayList([]const u8),
-
-    pub const BuildSystemType = enum {
-        /// ./configure && make && make install
-        autotools,
-        /// TODO: to be implemented
-        cmake,
-        /// TODO: to be implemented
-        makefile,
-    };
-
-    pub const CreateArgs = struct {
-        build_system_type: BuildSystemType,
-        source_dir: std.Build.LazyPath,
-        target: ?std.Build.ResolvedTarget = null,
-        optimize: std.builtin.OptimizeMode = .ReleaseFast,
-        lto: std.zig.LtoMode = .none,
-        /// -ffunction-sections -fdata-sections
-        separate_sections: bool = true,
-        /// -Wl,--gc-sections
-        gc_sections: bool = true,
-        /// null: based on the `optimize`
-        strip: ?bool = null,
-        /// run ./autogen.sh before ./configure ?
-        run_autogen: bool = false,
-        /// logic install directory
-        install_prefix: []const u8 = "/usr",
-    };
-
-    fn check_build_system_type(build_system_type: BuildSystemType) void {
-        switch (build_system_type) {
-            .autotools => {},
-            .cmake => @panic("TODO: to be implemented"),
-            .makefile => @panic("TODO: to be implemented"),
-        }
-    }
-
-    pub fn create(b: *std.Build, name: []const u8, args: CreateArgs) *ZMake {
-        check_build_system_type(args.build_system_type);
-        const self = b.allocator.create(ZMake) catch unreachable;
-        self.* = .{
-            .b = b,
-            .name = b.dupe(name),
-            .build_system_type = args.build_system_type,
-            .source_dir = args.source_dir,
-            .target = args.target orelse b.graph.host,
-            .optimize = args.optimize,
-            .lto = args.lto,
-            .separate_sections = args.separate_sections,
-            .gc_sections = args.gc_sections,
-            .strip = args.strip orelse switch (args.optimize) {
-                .Debug => false,
-                .ReleaseSafe => false,
-                .ReleaseSmall => true,
-                .ReleaseFast => true,
-            },
-            .run_autogen = args.run_autogen,
-            .install_prefix = args.install_prefix,
-            .configure_args = .empty,
-        };
-        return self;
-    }
-
-    pub fn add_configure_arg(self: *ZMake, arg: []const u8) void {
-        const b = self.b;
-        self.configure_args.append(b.allocator, b.dupe(arg)) catch unreachable;
-    }
-
-    /// return the path to the `build_out` directory
-    pub fn build(self: *ZMake) std.Build.LazyPath {
-        check_build_system_type(self.build_system_type);
-
-        const b = self.b;
-        const allocator = b.allocator;
-
-        // build options
-        const zig_exe = b.graph.zig_exe;
-        const zig_target = self.target.result.zigTriple(allocator) catch unreachable; // arch-os-abi (with os.version and abi.version)
-        const pure_target = self.target.result.linuxTriple(allocator) catch unreachable; // arch-os-abi
-        const zig_mcpu = std.zig.serializeCpuAlloc(allocator, self.target.result.cpu) catch unreachable; // cpu_model+features-features
-        const f_raw_optimize = switch (self.optimize) {
-            .Debug => "-g3 -O0",
-            .ReleaseSafe => "-g1 -O2",
-            .ReleaseSmall => "-g0 -Os",
-            .ReleaseFast => "-g0 -O3 -Xclang -O3",
-        };
-        const f_optimize = switch (self.lto) {
-            .none => f_raw_optimize,
-            .full => b.fmt("{s} -flto=full", .{f_raw_optimize}),
-            .thin => b.fmt("{s} -flto=thin", .{f_raw_optimize}),
-        };
-        const f_separate_sections = if (self.separate_sections) "-ffunction-sections -fdata-sections" else "";
-        const f_gc_sections = if (self.gc_sections) "-Wl,--gc-sections" else "";
-        const f_strip = if (self.strip) "-Wl,-s" else "";
-
-        var description_buf: std.ArrayList(u8) = .empty;
-        defer description_buf.deinit(allocator);
-
-        // description of the build (rebuild when changes occur)
-        const base_description = b.fmt(
-            \\# Generated by zmake
-            \\magic: {d}
-            \\zig_exe: {s}
-            \\zig_target: {s}
-            \\pure_target: {s}
-            \\zig_mcpu: {s}
-            \\optimize: {s}
-            \\lto: {s}
-            \\f_optimize: {s}
-            \\f_separate_sections: {s}
-            \\f_gc_sections: {s}
-            \\f_strip: {s}
-            \\build_system_type: {s}
-            \\run_autogen: {any}
-            \\install_prefix: {s}
-            \\
-        , .{
-            1, // change this when the build logic changes
-            zig_exe,
-            zig_target,
-            pure_target,
-            zig_mcpu,
-            @tagName(self.optimize),
-            @tagName(self.lto),
-            f_optimize,
-            f_separate_sections,
-            f_gc_sections,
-            f_strip,
-            @tagName(self.build_system_type),
-            self.run_autogen,
-            self.install_prefix,
-        });
-        description_buf.appendSlice(allocator, base_description) catch unreachable;
-
-        // the configure arguments also need to be included in the description
-        for (self.configure_args.items, 0..) |arg, i| {
-            const arg_description = b.fmt("configure_arg[{d}]: {s}\n", .{ i, arg });
-            description_buf.appendSlice(allocator, arg_description) catch unreachable;
-        }
-
-        const description = description_buf.toOwnedSlice(allocator) catch unreachable;
-
-        // copy the source dir to the build directory
-        const wf = b.addWriteFiles();
-        wf.step.name = self.get_step_name("copy source");
-        const build_dir = wf.addCopyDirectory(self.source_dir, "", .{});
-        _ = wf.add(".zmake_build.desc", description); // trigger rebuild if necessary
-
-        var pipeline = CommandPipeline.init(b, build_dir);
-
-        // autogen.sh
-        if (self.run_autogen)
-            _ = pipeline.add("./autogen.sh", .{ .name = self.get_step_name("./autogen.sh") });
-
-        // configure
-        const configure = pipeline.add("./configure", .{ .name = self.get_step_name("./configure") });
-        configure.addArg(b.fmt("CC={s} cc -target {s} -mcpu={s}", .{ zig_exe, pure_target, zig_mcpu }));
-        configure.addArg(b.fmt("CXX={s} c++ -target {s} -mcpu={s}", .{ zig_exe, pure_target, zig_mcpu }));
-        configure.addArg(b.fmt("LD={s} cc -target {s} -mcpu={s}", .{ zig_exe, pure_target, zig_mcpu }));
-        configure.addArg(b.fmt("AR={s} ar", .{zig_exe}));
-        configure.addArg(b.fmt("RANLIB={s} ranlib", .{zig_exe}));
-        configure.addArg(b.fmt("OBJCOPY={s} objcopy", .{zig_exe}));
-        configure.addArg(b.fmt("CFLAGS={s} {s}", .{ f_optimize, f_separate_sections }));
-        configure.addArg(b.fmt("CXXFLAGS={s} {s}", .{ f_optimize, f_separate_sections }));
-        configure.addArg(b.fmt("LDFLAGS={s} {s} {s}", .{ f_optimize, f_gc_sections, f_strip }));
-        configure.addArg(b.fmt("--host={s}", .{pure_target})); // must use the linux target
-        configure.addArg(b.fmt("--prefix={s}", .{self.install_prefix})); // the logic install directory
-        for (self.configure_args.items) |arg|
-            configure.addArg(arg); // configure arguments passed by the user
-
-        // make -j$(nproc)
-        const make = pipeline.add("make", .{ .name = self.get_step_name("make") });
-        make.addArg(b.fmt("-j{d}", .{std.Thread.getCpuCount() catch 2}));
-
-        // make install DESTDIR=build_out
-        const make_install = pipeline.add("make", .{ .name = self.get_step_name("make install") });
-        make_install.addArg("install");
-        const out_dir = make_install.addPrefixedOutputDirectoryArg("DESTDIR=", "build_out");
-
-        // $install_prefix/{include, lib, ...}
-        const rel_path = if (self.install_prefix.len > 0 and self.install_prefix[0] == '/')
-            self.install_prefix[1..]
-        else
-            self.install_prefix;
-
-        const build_out = out_dir.path(b, rel_path);
-        return build_out;
-    }
-
-    fn get_step_name(self: *ZMake, step_name: []const u8) []const u8 {
-        const b = self.b;
-        return b.fmt("zmake:{s} {s}", .{ self.name, step_name });
-    }
-};
+const ZMake = @import("zmake").ZMake;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -253,7 +9,7 @@ pub fn build(b: *std.Build) !void {
     const lto = b.option(std.zig.LtoMode, "lto", "enable link time optimization") orelse .none;
     const single_threaded = b.option(bool, "single_threaded", "single threaded mode for wolfssl") orelse false;
 
-    const zmake = ZMake.create(b, "wolfssl", .{
+    const wolfssl = ZMake.create(b, "wolfssl", .{
         .build_system_type = .autotools,
         .source_dir = b.dependency("wolfssl_source", .{}).path(""),
         .target = target,
@@ -262,41 +18,41 @@ pub fn build(b: *std.Build) !void {
         .run_autogen = true,
     });
 
-    zmake.add_configure_arg("--enable-jobserver=no"); // must be disabled (due to a bug in the wolfssl configure script)
-    zmake.add_configure_arg("--enable-static");
-    zmake.add_configure_arg("--disable-shared"); // we don't need shared library
-    zmake.add_configure_arg("--disable-openssl-compatible-defaults");
-    zmake.add_configure_arg("--disable-opensslextra");
-    zmake.add_configure_arg("--disable-opensslall");
-    zmake.add_configure_arg("--disable-errorqueue"); // this is the OpenSSL compatibility layer
-    zmake.add_configure_arg("--disable-oldnames");
-    zmake.add_configure_arg("--disable-examples");
-    zmake.add_configure_arg("--disable-crypttests");
-    zmake.add_configure_arg("--disable-asyncthreads");
-    zmake.add_configure_arg("--disable-oldtls");
-    zmake.add_configure_arg("--disable-dtls");
-    zmake.add_configure_arg("--disable-pwdbased");
-    zmake.add_configure_arg("--disable-aescbc");
-    zmake.add_configure_arg("--disable-dh");
-    zmake.add_configure_arg("--disable-sha3");
-    zmake.add_configure_arg("--disable-sha224");
-    zmake.add_configure_arg("--disable-sha"); // drop legacy SHA-1
-    zmake.add_configure_arg("--disable-oaep"); // drop RSA-OAEP (not used by TLS)
-    zmake.add_configure_arg("--disable-pkcs12"); // drop .p12/.pfx parsing support
-    zmake.add_configure_arg("--disable-asn-print"); // drop human-readable ASN1 text dumps
-    zmake.add_configure_arg("--enable-tls13");
-    zmake.add_configure_arg("--enable-ecc");
-    zmake.add_configure_arg("--enable-rsa");
-    zmake.add_configure_arg("--enable-sni"); // server name indication
-    zmake.add_configure_arg("--enable-alpn");
-    zmake.add_configure_arg("--enable-session-ticket");
+    wolfssl.add_configure_arg("--enable-jobserver=no"); // must be disabled (due to a bug in the wolfssl configure script)
+    wolfssl.add_configure_arg("--enable-static");
+    wolfssl.add_configure_arg("--disable-shared"); // we don't need shared library
+    wolfssl.add_configure_arg("--disable-openssl-compatible-defaults");
+    wolfssl.add_configure_arg("--disable-opensslextra");
+    wolfssl.add_configure_arg("--disable-opensslall");
+    wolfssl.add_configure_arg("--disable-errorqueue"); // this is the OpenSSL compatibility layer
+    wolfssl.add_configure_arg("--disable-oldnames");
+    wolfssl.add_configure_arg("--disable-examples");
+    wolfssl.add_configure_arg("--disable-crypttests");
+    wolfssl.add_configure_arg("--disable-asyncthreads");
+    wolfssl.add_configure_arg("--disable-oldtls");
+    wolfssl.add_configure_arg("--disable-dtls");
+    wolfssl.add_configure_arg("--disable-pwdbased");
+    wolfssl.add_configure_arg("--disable-aescbc");
+    wolfssl.add_configure_arg("--disable-dh");
+    wolfssl.add_configure_arg("--disable-sha3");
+    wolfssl.add_configure_arg("--disable-sha224");
+    wolfssl.add_configure_arg("--disable-sha"); // drop legacy SHA-1
+    wolfssl.add_configure_arg("--disable-oaep"); // drop RSA-OAEP (not used by TLS)
+    wolfssl.add_configure_arg("--disable-pkcs12"); // drop .p12/.pfx parsing support
+    wolfssl.add_configure_arg("--disable-asn-print"); // drop human-readable ASN1 text dumps
+    wolfssl.add_configure_arg("--enable-tls13");
+    wolfssl.add_configure_arg("--enable-ecc");
+    wolfssl.add_configure_arg("--enable-rsa");
+    wolfssl.add_configure_arg("--enable-sni"); // server name indication
+    wolfssl.add_configure_arg("--enable-alpn");
+    wolfssl.add_configure_arg("--enable-session-ticket");
     if (single_threaded)
-        zmake.add_configure_arg("--enable-singlethreaded");
+        wolfssl.add_configure_arg("--enable-singlethreaded");
     if (target.result.cpu.arch == .x86_64)
-        zmake.add_configure_arg("--enable-aesni");
+        wolfssl.add_configure_arg("--enable-aesni");
     // TODO: add more configure options
 
-    const build_out = zmake.build();
+    const build_out = wolfssl.build();
 
     // export the artifact
     b.addNamedLazyPath("include", build_out.path(b, "include"));
