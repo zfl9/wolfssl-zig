@@ -6,6 +6,7 @@
 
 - Zig 0.15.2+
 - make、autoconf、automake、libtool
+- bear（可选，使用 `-Dworkspace` 时需要）
 
 ## 使用方法
 
@@ -20,8 +21,11 @@ zig fetch --save=wolfssl https://github.com/zfl9/wolfssl-zig/archive/refs/tags/v
 ```zig
 const wolfssl = b.dependency("wolfssl", .{
     .target = target,
+    // always ReleaseFast, see build.zig:24
+    // .optimize = optimize,
     .lto = lto,
     .single_threaded = single_threaded,
+    .nproc = nproc,
 });
 const include_dir = wolfssl.namedLazyPath("include");
 const lib_file = wolfssl.namedLazyPath("libwolfssl.a");
@@ -34,12 +38,15 @@ const lib_file = wolfssl.namedLazyPath("libwolfssl.a");
 
 ## 构建选项
 
-支持 Zig 标准目标选项（`-Dtarget`、`-Dcpu` 等），此外还有：
+支持 Zig 标准的 target、optimize 选项，此外还有：
 
 | 选项 | 类型 | 默认值 | 描述 |
 |---|---|---|---|
 | `-Dlto` | `enum` | `none` | LTO 模式（`none` / `full` / `thin`） |
-| `-Dsingle_threaded` | `bool` | `false` | 取消 wolfSSL 的线程安全支持，适用于单线程场景 |
+| `-Dsingle_threaded` | `bool` | `false` | 取消 wolfSSL 的线程安全支持，适用于单线程程序 |
+| `-Dnproc=<n>` | `usize` | CPU 核心数 | make 并行任务数 |
+| `-Dworkspace` | `bool` | `false` | 生成 IDE workspace symlink（需安装 bear） |
+| `-Dworkspace_name=<name>` | `string` | `"wolfssl"` | workspace symlink 名称，指定后自动启用 workspace |
 
 ## 本地构建
 

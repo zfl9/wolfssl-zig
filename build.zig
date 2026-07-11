@@ -3,11 +3,19 @@ const ZMake = @import("zmake").ZMake;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    // const optimize = b.standardOptimizeOption(.{});
+    _ = b.standardOptimizeOption(.{}); // NOTE: always use release mode
 
-    // build options
+    // optimize options
     const lto = b.option(std.zig.LtoMode, "lto", "enable link time optimization") orelse .none;
     const single_threaded = b.option(bool, "single_threaded", "single threaded mode for wolfssl") orelse false;
+
+    // parallel make options
+    const nproc = b.option(usize, "nproc", "make -j<nproc>, default: the number of cores");
+
+    // IDE workspace options
+    var workspace = b.option(bool, "workspace", "symlink to the workspace with clangd support") orelse false;
+    const workspace_name = b.option([]const u8, "workspace_name", "name of the workspace symlink, default: wolfssl");
+    if (workspace_name != null) workspace = true;
 
     const wolfssl = ZMake.create(b, "wolfssl", .{
         .build_system_type = .autotools,
@@ -16,6 +24,9 @@ pub fn build(b: *std.Build) !void {
         .optimize = .ReleaseFast,
         .lto = lto,
         .run_autogen = true,
+        .nproc = nproc,
+        .use_bear = workspace,
+        .build_dir_symlink = if (workspace) b.fmt("workspace_{s}", .{workspace_name orelse "wolfssl"}) else null,
     });
 
     wolfssl.add_configure_arg("--enable-jobserver=no"); // must be disabled (due to a bug in the wolfssl configure script)
@@ -40,12 +51,18 @@ pub fn build(b: *std.Build) !void {
     wolfssl.add_configure_arg("--disable-oaep"); // drop RSA-OAEP (not used by TLS)
     wolfssl.add_configure_arg("--disable-pkcs12"); // drop .p12/.pfx parsing support
     wolfssl.add_configure_arg("--disable-asn-print"); // drop human-readable ASN1 text dumps
+    wolfssl.add_configure_arg("--enable-tlsv12");
     wolfssl.add_configure_arg("--enable-tls13");
     wolfssl.add_configure_arg("--enable-ecc");
     wolfssl.add_configure_arg("--enable-rsa");
+    wolfssl.add_configure_arg("--enable-aesgcm");
+    wolfssl.add_configure_arg("--enable-chacha");
+    wolfssl.add_configure_arg("--enable-poly1305");
+    wolfssl.add_configure_arg("--enable-curve25519");
     wolfssl.add_configure_arg("--enable-sni"); // server name indication
     wolfssl.add_configure_arg("--enable-alpn");
     wolfssl.add_configure_arg("--enable-session-ticket");
+    wolfssl.add_configure_arg("--enable-sys-ca-certs");
     if (single_threaded)
         wolfssl.add_configure_arg("--enable-singlethreaded");
     if (target.result.cpu.arch == .x86_64)
