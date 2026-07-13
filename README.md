@@ -6,7 +6,7 @@
 
 - Zig 0.15.2+
 - make、autoconf、automake、libtool
-- bear（可选，使用 `-Dworkspace` 时需要）
+- bear（可选，使用 `-Demit_cdb` 或 `-Dworkspace` 时需要）
 
 ## 使用方法
 
@@ -45,8 +45,20 @@ const lib_file = wolfssl.namedLazyPath("libwolfssl.a");
 | `-Dlto` | `enum` | `none` | LTO 模式（`none` / `full` / `thin`） |
 | `-Dsingle_threaded` | `bool` | `false` | 取消 wolfSSL 的线程安全支持，适用于单线程程序 |
 | `-Dnproc=<n>` | `usize` | CPU 核心数 | make 并行任务数 |
+| `-Demit_cdb` | `bool` | `false` | 生成 `compile_commands.json`（需安装 bear） |
 | `-Dworkspace` | `bool` | `false` | 生成 IDE workspace symlink（需安装 bear） |
 | `-Dworkspace_name=<name>` | `string` | `"wolfssl"` | workspace symlink 名称，指定后自动启用 workspace |
+
+## 导出资产
+
+以下资产通过 `dependency.namedLazyPath("name")` 获取：
+
+| 名称 | 说明 | 可用条件 |
+|---|---|---|
+| `include` | wolfSSL 头文件目录 | 始终可用 |
+| `lib` | wolfSSL 库文件目录（含 `libwolfssl.a`） | 始终可用 |
+| `libwolfssl.a` | wolfSSL 静态库文件 | 始终可用 |
+| `compile_commands.json` | `compile_commands.json` 文件 | 使用 `-Demit_cdb` 时可用 |
 
 ## 本地构建
 
