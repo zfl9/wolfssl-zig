@@ -12,7 +12,8 @@ pub fn build(b: *std.Build) !void {
     // parallel make options
     const nproc = b.option(usize, "nproc", "make -j<nproc>, default: the number of cores");
 
-    // IDE workspace options
+    // IDE / workspace options
+    const emit_cdb = b.option(bool, "emit_cdb", "emit compile_commands.json (clangd/LSP support)") orelse false;
     var workspace = b.option(bool, "workspace", "symlink to the workspace with clangd support") orelse false;
     const workspace_name = b.option([]const u8, "workspace_name", "name of the workspace symlink, default: wolfssl");
     if (workspace_name != null) workspace = true;
@@ -25,7 +26,7 @@ pub fn build(b: *std.Build) !void {
         .lto = lto,
         .run_autogen = true,
         .nproc = nproc,
-        .use_bear = workspace,
+        .use_bear = emit_cdb or workspace,
         .build_dir_symlink = if (workspace) b.fmt("workspace_{s}", .{workspace_name orelse "wolfssl"}) else null,
     });
 
@@ -70,11 +71,13 @@ pub fn build(b: *std.Build) !void {
     // TODO: add more configure options
 
     const build_out = wolfssl.build();
+    const build_dir = wolfssl.get_build_dir();
 
     // export the artifact
     b.addNamedLazyPath("include", build_out.path(b, "include"));
     b.addNamedLazyPath("lib", build_out.path(b, "lib"));
     b.addNamedLazyPath("libwolfssl.a", build_out.path(b, "lib/libwolfssl.a"));
+    b.addNamedLazyPath("compile_commands.json", build_dir.path(b, "compile_commands.json")); // available only when using `bear`
 
     // install the header files
     b.installDirectory(.{
