@@ -9,8 +9,8 @@
             .hash = "N-V-__8AAPhMWQf0AfQZBj09a8GS8HmcI1gcIMKqC5PmBx6a",
         },
         .zmake = .{
-            .url = "https://github.com/zfl9/zmake/archive/refs/tags/v1.2.0.tar.gz",
-            .hash = "zmake-1.2.0-UnhqkHpHAAA7HZK7OFn1SXCKhUSRFr4o92iH2dmG6aC3",
+            .url = "https://github.com/zfl9/zmake/archive/c778dc790eeb55bb8cd97ac649c3085f6350d983.tar.gz",
+            .hash = "zmake-1.3.0-UnhqkHNaAAAQFrTVoMT1Itbz4FWaQA29LHhHHOYlrPYv",
         },
     },
     .paths = .{

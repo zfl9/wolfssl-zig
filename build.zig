@@ -26,7 +26,6 @@ pub fn build(b: *std.Build) !void {
         .lto = lto,
         .run_autogen = true,
         .nproc = nproc,
-        .use_bear = emit_cdb or workspace,
         .build_dir_symlink = if (workspace) b.fmt("workspace_{s}", .{workspace_name orelse "wolfssl"}) else null,
     });
 
