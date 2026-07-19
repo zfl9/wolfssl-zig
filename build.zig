@@ -13,7 +13,6 @@ pub fn build(b: *std.Build) !void {
     const nproc = b.option(usize, "nproc", "make -j<nproc>, default: the number of cores");
 
     // IDE / workspace options
-    const emit_cdb = b.option(bool, "emit_cdb", "emit compile_commands.json (clangd/LSP support)") orelse false;
     var workspace = b.option(bool, "workspace", "symlink to the workspace with clangd support") orelse false;
     const workspace_name = b.option([]const u8, "workspace_name", "name of the workspace symlink, default: wolfssl");
     if (workspace_name != null) workspace = true;
